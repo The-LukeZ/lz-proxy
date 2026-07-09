@@ -5,6 +5,7 @@
 # Prometheus scrapes lz-proxy:9000 over the shared internal network and is NOT
 # published to the host. Grafana is published to loopback only (127.0.0.1:3000)
 # so you can view it locally / over an SSH tunnel — never expose it publicly.
+# local grafana credentials: admin/admin (change in production). Dashboards are pre-provisioned.
 services:
   prometheus:
     image: prom/prometheus:latest
