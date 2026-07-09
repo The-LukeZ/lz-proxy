@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-lz-proxy is a single-node, transparent Discord REST ratelimit proxy in Rust. It sits in front of `discord.com`, tracks per-bucket and per-bot global ratelimits, paces requests so clients can fire freely, and forwards everything else byte-for-byte. `PLAN.md` is the authoritative spec and phase-by-phase build plan - read it before making non-trivial changes.
+lz-proxy is a single-node, transparent Discord REST ratelimit proxy in Rust. It sits in front of `discord.com`, tracks per-bucket and per-bot global ratelimits, paces requests so clients can fire freely, and forwards everything else byte-for-byte.
 
 **Hard scope boundaries (do not cross without being asked):** no clustering / multi-instance coordination, no Redis or distributed state, no request retries (return the 429 to the client), no caching or request/response rewriting, no gateway/websocket proxying (REST only).
 

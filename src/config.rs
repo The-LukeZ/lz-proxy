@@ -1,4 +1,4 @@
-//! Runtime configuration, loaded from environment variables (see PLAN.md table).
+//! Runtime configuration, loaded from environment variables.
 
 use std::collections::HashMap;
 use std::time::Duration;
