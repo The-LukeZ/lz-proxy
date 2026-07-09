@@ -78,7 +78,7 @@ common way a "firewalled" proxy ends up open to the world.
 
 Pick one:
 
-### Pattern B - bot on the host, not in Docker (this repo's default)
+### Pattern A - bot on the host, not in Docker (this repo's default)
 
 The shipped `docker-compose.yml` publishes the proxy to **loopback only**:
 
@@ -95,7 +95,7 @@ up:
 docker compose up -d --build
 ```
 
-### Pattern A - bot also in Docker
+### Pattern B - bot also in Docker
 
 If the bot runs in Docker too, don't publish the port at all. Drop the `ports:`
 block, put the bot on the `internal` network, and let it reach
@@ -110,8 +110,7 @@ Do **not** publish to `0.0.0.0`. Put the traffic on a private network
 `DOCKER-USER` chain (evaluated before Docker's own rules) to restrict source IPs,
 or install the `ufw-docker` helper so UFW rules actually apply to published ports.
 
-**Metrics port (9000):** keep it internal-only too (Pattern A, or
-`127.0.0.1:9000:9000`). Never publish it publicly.
+**Metrics port (9000):** keep it internal-only too (Pattern B, or `127.0.0.1:9000:9000`). Never publish it publicly.
 
 To confirm you got it right, `curl` the proxy port from another machine - it
 should refuse/fail.
