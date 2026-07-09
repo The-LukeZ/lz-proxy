@@ -1,0 +1,39 @@
+# Optional observability overlay. Layer it on top of the base compose:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
+#
+# Prometheus scrapes lz-proxy:9000 over the shared internal network and is NOT
+# published to the host. Grafana is published to loopback only (127.0.0.1:3000)
+# so you can view it locally / over an SSH tunnel — never expose it publicly.
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks: [internal]
+    # no `ports:` — internal only.
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: "admin"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks: [internal]
+    depends_on: [prometheus]
+
+volumes:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  internal:
+    external: false

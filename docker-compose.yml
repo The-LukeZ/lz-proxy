@@ -1,0 +1,29 @@
+# Pattern B (default): the proxy runs in Docker, your bot runs on the HOST
+# (not in Docker). The port is published to loopback ONLY, so your host bot can
+# reach it at http://127.0.0.1:8080/api while it stays off the public internet.
+#
+# The `127.0.0.1:` prefix is load-bearing: a bare "8080:8080" would punch through
+# UFW via Docker's iptables rules and expose the proxy to the world (see README).
+#
+# If your bot ALSO runs in Docker, prefer Pattern A instead: drop the `ports:`
+# block, put the bot on the `internal` network, and let it reach http://lz-proxy:8080.
+services:
+  lz-proxy:
+    build: .
+    restart: unless-stopped
+    environment:
+      LZ_BIND: "0.0.0.0:8080"
+      LZ_METRICS_BIND: "0.0.0.0:9000"
+      LZ_LOG_LEVEL: "info"
+      LZ_GLOBAL_RATELIMIT: "50"
+      # LZ_BOT_RATELIMIT_OVERRIDES: "botid:limit,botid:limit"
+    ports:
+      - "127.0.0.1:8080:8080"
+      # Metrics stays on the internal network for the monitoring overlay.
+      # Uncomment to scrape from a host-side Prometheus (loopback only):
+      # - "127.0.0.1:9000:9000"
+    networks: [internal]
+
+networks:
+  internal:
+    driver: bridge
