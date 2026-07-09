@@ -13,9 +13,7 @@ use crate::proxy::{self, AppState};
 
 /// The inbound proxy router: everything falls through to Discord.
 pub fn proxy_router(state: AppState) -> Router {
-    Router::new()
-        .fallback(any(proxy::handle))
-        .with_state(state)
+    Router::new().fallback(any(proxy::handle)).with_state(state)
 }
 
 /// The metrics/health router, served on a separate port.

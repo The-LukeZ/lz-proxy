@@ -80,9 +80,9 @@ fn env_bool(key: &str, default: bool) -> Result<bool> {
 fn parse_overrides(raw: &str) -> Result<HashMap<String, u32>> {
     let mut map = HashMap::new();
     for entry in raw.split(',').map(str::trim).filter(|s| !s.is_empty()) {
-        let (id, limit) = entry
-            .split_once(':')
-            .with_context(|| format!("malformed LZ_BOT_RATELIMIT_OVERRIDES entry {entry:?}: expected botid:limit"))?;
+        let (id, limit) = entry.split_once(':').with_context(|| {
+            format!("malformed LZ_BOT_RATELIMIT_OVERRIDES entry {entry:?}: expected botid:limit")
+        })?;
         let limit: u32 = limit
             .parse()
             .with_context(|| format!("malformed limit in override entry {entry:?}"))?;

@@ -124,7 +124,11 @@ impl BucketRegistry {
     }
 
     /// Get an existing worker's sender or spawn a fresh worker task.
-    fn worker(self: &Arc<Self>, worker_key: &str, global: Option<Arc<GlobalLimiter>>) -> mpsc::Sender<Job> {
+    fn worker(
+        self: &Arc<Self>,
+        worker_key: &str,
+        global: Option<Arc<GlobalLimiter>>,
+    ) -> mpsc::Sender<Job> {
         if let Some(tx) = self.workers.get(worker_key) {
             return tx.clone();
         }
@@ -207,7 +211,12 @@ async fn fire(
     job: &Job,
     state: &mut BucketState,
 ) -> Result<ProxyResponse, ProxyError> {
-    let route = job.route_key.splitn(2, '|').nth(1).unwrap_or("").to_string();
+    let route = job
+        .route_key
+        .splitn(2, '|')
+        .nth(1)
+        .unwrap_or("")
+        .to_string();
     let method_label = job.method.as_str().to_string();
     let timer = registry
         .metrics

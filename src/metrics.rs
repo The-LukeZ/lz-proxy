@@ -25,7 +25,10 @@ impl Metrics {
         let registry = Registry::new();
 
         let requests = IntCounterVec::new(
-            prometheus::opts!("lz_requests_total", "Proxied requests by method/route/status"),
+            prometheus::opts!(
+                "lz_requests_total",
+                "Proxied requests by method/route/status"
+            ),
             &["method", "route", "status"],
         )
         .unwrap();
@@ -34,7 +37,8 @@ impl Metrics {
             &["scope"],
         )
         .unwrap();
-        let in_flight = IntGauge::new("lz_in_flight", "Requests currently queued or firing").unwrap();
+        let in_flight =
+            IntGauge::new("lz_in_flight", "Requests currently queued or firing").unwrap();
         let buckets = IntGauge::new("lz_buckets", "Live bucket worker tasks").unwrap();
         let outbound_latency = HistogramVec::new(
             prometheus::histogram_opts!(
@@ -45,14 +49,19 @@ impl Metrics {
             &["method"],
         )
         .unwrap();
-        let global_waits =
-            IntCounter::new("lz_global_limit_waits_total", "Cumulative global-limiter waits").unwrap();
+        let global_waits = IntCounter::new(
+            "lz_global_limit_waits_total",
+            "Cumulative global-limiter waits",
+        )
+        .unwrap();
 
         registry.register(Box::new(requests.clone())).unwrap();
         registry.register(Box::new(ratelimited.clone())).unwrap();
         registry.register(Box::new(in_flight.clone())).unwrap();
         registry.register(Box::new(buckets.clone())).unwrap();
-        registry.register(Box::new(outbound_latency.clone())).unwrap();
+        registry
+            .register(Box::new(outbound_latency.clone()))
+            .unwrap();
         registry.register(Box::new(global_waits.clone())).unwrap();
 
         Self {
