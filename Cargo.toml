@@ -1,7 +1,7 @@
 [package]
 name = "lz-proxy"
 version = "0.1.0"
-edition = "2021"
+edition = "2026"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
