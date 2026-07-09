@@ -14,7 +14,7 @@ const MAJOR_PARENTS: [&str; 3] = ["channels", "guilds", "webhooks"];
 /// Major parameters (`channel_id`, `guild_id`, `webhook_id`/`webhook_token`)
 /// are preserved; all other ids are replaced with `{id}`. The method is part
 /// of the key because Discord buckets are method-specific. Query string is
-/// dropped. This is only a first guess — the real `x-ratelimit-bucket` from
+/// dropped. This is only a first guess - the real `x-ratelimit-bucket` from
 /// the response is what ultimately converges distinct routes.
 pub fn normalize_route(method: &str, path: &str) -> String {
     let path = path.split('?').next().unwrap_or(path);
@@ -28,7 +28,7 @@ pub fn normalize_route(method: &str, path: &str) -> String {
             if MAJOR_PARENTS.contains(&prev) {
                 // Major parameter: keep the real value so it gets its own bucket.
                 out.push(seg.to_string());
-                // A webhook id is followed by a webhook token — also major.
+                // A webhook id is followed by a webhook token - also major.
                 if prev == "webhooks" {
                     if let Some(tok) = segments.peek() {
                         out.push((*tok).to_string());
@@ -40,7 +40,7 @@ pub fn normalize_route(method: &str, path: &str) -> String {
                 out.push("{id}".to_string());
             }
         } else if prev == "reactions" {
-            // Emoji segment — collapse so all reactions on a message share a bucket.
+            // Emoji segment - collapse so all reactions on a message share a bucket.
             out.push("{emoji}".to_string());
         } else {
             out.push(seg.to_string());
@@ -60,10 +60,10 @@ fn is_snowflake(seg: &str) -> bool {
 ///
 /// The token is never stored or logged; only its SHA-256 hex digest is used.
 /// The `bot_id` (public, embedded in the token) is extracted for override
-/// lookup and metrics — it is not secret on its own.
+/// lookup and metrics - it is not secret on its own.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BotScope {
-    /// Full hex digest of the auth header — used as the map key.
+    /// Full hex digest of the auth header - used as the map key.
     pub hash: String,
     /// Public bot id decoded from the token, or empty if undecodable.
     pub bot_id: String,

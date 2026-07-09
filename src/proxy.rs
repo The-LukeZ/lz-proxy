@@ -61,7 +61,7 @@ pub async fn handle(
             .get(axum::http::header::AUTHORIZATION)
             .and_then(|v| v.to_str().ok()),
     );
-    // Only a short hash prefix is ever logged — never the token itself.
+    // Only a short hash prefix is ever logged - never the token itself.
     let scope_log = scope
         .as_ref()
         .map(|s| s.log_prefix().to_string())

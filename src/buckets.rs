@@ -166,7 +166,7 @@ async fn bucket_worker(
     loop {
         let job = match tokio::time::timeout(idle_ttl, rx.recv()).await {
             Ok(Some(job)) => job,
-            // Channel closed or idle for too long — retire.
+            // Channel closed or idle for too long - retire.
             Ok(None) | Err(_) => break,
         };
 

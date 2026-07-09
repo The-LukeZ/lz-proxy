@@ -4,10 +4,10 @@
 #
 # Prometheus scrapes lz-proxy:9000 over the shared internal network and is NOT
 # published to the host. Grafana is published to loopback only (127.0.0.1:3131)
-# so you can view it locally / over an SSH tunnel — never expose it publicly.
+# so you can view it locally / over an SSH tunnel - never expose it publicly.
 # Host port is 3131 (not Grafana's default 3000) to avoid colliding with other
 # services that may already bind localhost:3000 on a shared host (e.g. a
-# reverse-proxied app) — a collision there would leak this dashboard onto
+# reverse-proxied app) - a collision there would leak this dashboard onto
 # whatever public hostname points at port 3000.
 # local grafana credentials: admin/admin (change in production). Dashboards are pre-provisioned.
 services:
@@ -18,7 +18,7 @@ services:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
     networks: [internal]
-    # no `ports:` — internal only.
+    # no `ports:` - internal only.
 
   grafana:
     image: grafana/grafana:latest

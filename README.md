@@ -5,7 +5,7 @@ of Discord's API; point your bot(s) at it with a base-URL change. It tracks
 per-bucket and per-bot global ratelimits, paces requests so clients can fire
 freely, and forwards everything else byte-for-byte.
 
-Conceptually a stripped-down `nirn-proxy` — **no clustering, no gossip, no
+Conceptually a stripped-down `nirn-proxy` - **no clustering, no gossip, no
 consistent hashing, no Redis**. One process, in front of `discord.com`.
 
 ## What it does
@@ -21,7 +21,7 @@ consistent hashing, no Redis**. One process, in front of `discord.com`.
   50 req/s, overridable per bot.
 - **429 handling.** Honours `retry-after` and `x-ratelimit-scope`: `global` 429s
   pause the whole bot; `user`/`shared` 429s pause just that bucket. The proxy
-  **never retries** — it returns the 429 to the client with headers intact.
+  **never retries** - it returns the 429 to the client with headers intact.
 - **Multi-bot.** Buckets are scoped per token, so two bots never share a budget.
 - **Observability.** Prometheus metrics + health endpoint on a separate port.
 - **No token leakage.** The `Authorization` header is never logged; only a short
@@ -65,9 +65,9 @@ Metrics: `lz_requests_total{method,route,status}`,
 `lz_ratelimited_total{scope}`, `lz_in_flight`, `lz_buckets`,
 `lz_outbound_latency_seconds`, `lz_global_limit_waits_total`.
 
-## Deployment — read this carefully
+## Deployment - read this carefully
 
-lz-proxy should **never** be reachable from the internet — only your bot
+lz-proxy should **never** be reachable from the internet - only your bot
 processes need it.
 
 **The Docker/UFW gotcha:** Docker writes its own iptables rules into the `DOCKER`
@@ -78,7 +78,7 @@ common way a "firewalled" proxy ends up open to the world.
 
 Pick one:
 
-### Pattern B — bot on the host, not in Docker (this repo's default)
+### Pattern B - bot on the host, not in Docker (this repo's default)
 
 The shipped `docker-compose.yml` publishes the proxy to **loopback only**:
 
@@ -88,21 +88,21 @@ ports:
 ```
 
 Your host bot connects to `http://127.0.0.1:8080/api`. The `127.0.0.1:` prefix is
-what keeps it off the public internet — a bare `"8080:8080"` would not. Bring it
+what keeps it off the public internet - a bare `"8080:8080"` would not. Bring it
 up:
 
 ```sh
 docker compose up -d --build
 ```
 
-### Pattern A — bot also in Docker
+### Pattern A - bot also in Docker
 
 If the bot runs in Docker too, don't publish the port at all. Drop the `ports:`
 block, put the bot on the `internal` network, and let it reach
 `http://lz-proxy:8080`. Nothing is published to a host interface, so the
 Docker/UFW gotcha can't bite.
 
-### Pattern C — bot on another machine
+### Pattern C - bot on another machine
 
 Do **not** publish to `0.0.0.0`. Put the traffic on a private network
 (WireGuard/Tailscale) and bind the published port to that interface's IP:
@@ -113,7 +113,7 @@ or install the `ufw-docker` helper so UFW rules actually apply to published port
 **Metrics port (9000):** keep it internal-only too (Pattern A, or
 `127.0.0.1:9000:9000`). Never publish it publicly.
 
-To confirm you got it right, `curl` the proxy port from another machine — it
+To confirm you got it right, `curl` the proxy port from another machine - it
 should refuse/fail.
 
 ## Monitoring (Prometheus + Grafana)
@@ -129,7 +129,7 @@ docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
 ```
 
 Grafana is published to **loopback only** (`127.0.0.1:3131`, admin/admin by
-default — change it). View it locally or over an SSH tunnel; never expose it
+default - change it). View it locally or over an SSH tunnel; never expose it
 publicly. The `lz-proxy` dashboard appears automatically.
 
 **Bring-your-own Grafana.** If you already run Prometheus + Grafana, point your

@@ -1,4 +1,4 @@
-//! lz-proxy — a single-node transparent Discord REST ratelimit proxy.
+//! lz-proxy - a single-node transparent Discord REST ratelimit proxy.
 
 mod buckets;
 mod config;
