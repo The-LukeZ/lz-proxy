@@ -148,3 +148,9 @@ cargo build --release
 # static musl binary + tiny image:
 docker build -t lz-proxy .
 ```
+
+---
+
+### Built with AI
+
+Because I needed this and I'm not that good with Rust yet, I used Claude to help me get the first working version. It was a great way to get a working prototype quickly and I learned from it.
