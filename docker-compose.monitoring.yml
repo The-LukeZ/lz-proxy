@@ -3,8 +3,12 @@
 #   docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
 #
 # Prometheus scrapes lz-proxy:9000 over the shared internal network and is NOT
-# published to the host. Grafana is published to loopback only (127.0.0.1:3000)
+# published to the host. Grafana is published to loopback only (127.0.0.1:3131)
 # so you can view it locally / over an SSH tunnel — never expose it publicly.
+# Host port is 3131 (not Grafana's default 3000) to avoid colliding with other
+# services that may already bind localhost:3000 on a shared host (e.g. a
+# reverse-proxied app) — a collision there would leak this dashboard onto
+# whatever public hostname points at port 3000.
 # local grafana credentials: admin/admin (change in production). Dashboards are pre-provisioned.
 services:
   prometheus:
@@ -27,7 +31,7 @@ services:
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:3131:3000"
     networks: [internal]
     depends_on: [prometheus]
 

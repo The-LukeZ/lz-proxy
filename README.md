@@ -128,7 +128,7 @@ dashboard already provisioned:
 docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
 ```
 
-Grafana is published to **loopback only** (`127.0.0.1:3000`, admin/admin by
+Grafana is published to **loopback only** (`127.0.0.1:3131`, admin/admin by
 default — change it). View it locally or over an SSH tunnel; never expose it
 publicly. The `lz-proxy` dashboard appears automatically.
 
