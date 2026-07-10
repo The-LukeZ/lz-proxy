@@ -30,6 +30,33 @@ consistent hashing, no Redis**. One process, in front of `discord.com`.
 Non-goals: retries, caching, request/response rewriting, gateway/websocket
 proxying, and any form of clustering.
 
+## lz-proxy vs nirn-proxy
+
+Both sit in front of `discord.com` and pace requests per-bucket so bots don't eat 429s. Differ in scope:
+
+|                     | lz-proxy                                                      | nirn-proxy                                                  |
+| ------------------- | ------------------------------------------------------------- | ----------------------------------------------------------- |
+| Topology            | one proxy instance (many bot/shard processes can point at it) | multi-instance proxy, clustered (gossip/consistent hashing) |
+| Shared state        | none - in-memory per process                                  | Redis-backed shared bucket state                            |
+| Retries             | never - 429 returned to client                                | can retry internally                                        |
+| Caching / rewriting | none - byte-for-byte passthrough                              | none (also transparent)                                     |
+| Gateway/WS proxy    | no - REST only                                                | no - REST only                                              |
+| Language            | Rust                                                          | Go                                                          |
+| Ops complexity      | one binary, no external deps                                  | needs Redis + cluster config for multi-node                 |
+
+Note: sharding (many bot processes, same token) is fine on lz-proxy - all
+shards point at the one proxy instance, which holds the shared bucket state in
+memory. The clustering nirn-proxy adds is for running _multiple proxy
+instances_ (e.g. behind a load balancer for HA/scale-out), which then need
+Redis to share state between proxy nodes.
+
+**Pick nirn-proxy** if need multiple proxy instances (HA, scale-out beyond one
+box) and already run Redis.
+
+**Pick lz-proxy** if one proxy instance is enough (true even with many bot
+shard processes behind it), want zero external deps, small Rust binary.
+Simpler = fewer moving parts to break.
+
 ## Quick start
 
 ```sh
