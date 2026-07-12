@@ -175,6 +175,10 @@ cargo build --release
 docker build -t lz-proxy .
 ```
 
+### License
+
+Licensed under [PolyForm Perimeter 1.0.1](LICENSE) — free to use, including commercially, but you may not offer a competing product built on it.
+
 ---
 
 ### Built with AI
