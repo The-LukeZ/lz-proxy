@@ -6,7 +6,7 @@ use prometheus::{
 
 pub struct Metrics {
     pub registry: Registry,
-    /// Requests by method, normalized route, and status.
+    /// Requests by method, templated route, and status.
     pub requests: IntCounterVec,
     /// 429s split by `x-ratelimit-scope` (user/shared/global/unknown).
     pub ratelimited: IntCounterVec,
@@ -14,7 +14,7 @@ pub struct Metrics {
     pub in_flight: IntGauge,
     /// Live bucket workers.
     pub buckets: IntGauge,
-    /// Outbound request latency (seconds), by method.
+    /// Discord response time (seconds), by method and templated route.
     pub outbound_latency: HistogramVec,
     /// Count of waits caused by the global limiter.
     pub global_waits: IntCounter,
@@ -46,7 +46,7 @@ impl Metrics {
                 "Outbound request latency in seconds",
                 vec![0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0]
             ),
-            &["method"],
+            &["method", "route"],
         )
         .unwrap();
         let global_waits = IntCounter::new(

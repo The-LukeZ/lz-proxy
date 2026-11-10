@@ -12,7 +12,7 @@ use axum::response::IntoResponse;
 use tracing::{info, warn};
 
 use crate::buckets::{BucketRegistry, ProxyError};
-use crate::ratelimit::{normalize_route, BotScope};
+use crate::ratelimit::{metric_route, normalize_route, BotScope};
 
 /// Upstream Discord API origin. Path + query are appended verbatim.
 const DISCORD_BASE: &str = "https://discord.com";
@@ -53,6 +53,8 @@ pub async fn handle(
     let url = format!("{DISCORD_BASE}{path_and_query}");
 
     let route = normalize_route(method.as_str(), path);
+    // Templated route for logs: never contains ids or webhook/interaction tokens.
+    let metric_route = metric_route(method.as_str(), path);
     let method_log = method.as_str().to_string();
 
     let scope = BotScope::from_auth(
@@ -83,7 +85,7 @@ pub async fn handle(
 
     let result = state
         .registry
-        .dispatch(scope, route, method, url, headers, body)
+        .dispatch(scope, route, metric_route.clone(), method, url, headers, body)
         .await;
 
     match result {
@@ -100,10 +102,12 @@ pub async fn handle(
             build_response(resp)
         }
         Err(ProxyError::Upstream(e)) => {
-            warn!(error = %e, "upstream request failed");
+            // `e` was built with `without_url()`, so no token-bearing path is logged.
+            warn!(error = %e, method = %method_log, route = %metric_route, "upstream request failed");
             (StatusCode::BAD_GATEWAY, "upstream request failed").into_response()
         }
         Err(ProxyError::WorkerGone) => {
+            warn!(method = %method_log, route = %metric_route, "bucket worker unavailable");
             (StatusCode::SERVICE_UNAVAILABLE, "bucket worker unavailable").into_response()
         }
     }

@@ -20,6 +20,8 @@ pub struct Job {
     pub body: Bytes,
     /// The synthetic route key, so the worker can record the learned bucket hash.
     pub route_key: String,
+    /// Templated route (no ids or tokens), for metric labels only.
+    pub metric_route: String,
     pub respond: oneshot::Sender<Result<ProxyResponse, ProxyError>>,
 }
 
@@ -28,7 +30,7 @@ pub struct ProxyResponse {
     pub status: u16,
     pub headers: HeaderMap,
     pub body: Bytes,
-    /// Normalized route, for metrics labelling.
+    /// Templated route (no ids or tokens), safe for metrics and logs.
     pub route: String,
 }
 
@@ -77,10 +79,12 @@ impl BucketRegistry {
     }
 
     /// Route a request onto its bucket worker and await the response.
+    #[allow(clippy::too_many_arguments)]
     pub async fn dispatch(
         self: &Arc<Self>,
         scope: Option<BotScope>,
         route: String,
+        metric_route: String,
         method: reqwest::Method,
         url: String,
         headers: HeaderMap,
@@ -110,6 +114,7 @@ impl BucketRegistry {
                 headers: headers.clone(),
                 body: body.clone(),
                 route_key: route_key.clone(),
+                metric_route: metric_route.clone(),
                 respond,
             };
 
@@ -118,9 +123,27 @@ impl BucketRegistry {
                 self.workers.remove(&worker_key);
                 continue;
             }
-            return rx.await.map_err(|_| ProxyError::WorkerGone)?;
+            let result = rx.await.unwrap_or(Err(ProxyError::WorkerGone));
+            if let Err(e) = &result {
+                self.count_failure(&method, &metric_route, e);
+            }
+            return result;
         }
-        Err(ProxyError::WorkerGone)
+        let err = ProxyError::WorkerGone;
+        self.count_failure(&method, &metric_route, &err);
+        Err(err)
+    }
+
+    /// Count a request that failed before Discord answered (502 / 503).
+    fn count_failure(&self, method: &reqwest::Method, metric_route: &str, err: &ProxyError) {
+        let status = match err {
+            ProxyError::Upstream(_) => "502",
+            ProxyError::WorkerGone => "503",
+        };
+        self.metrics
+            .requests
+            .with_label_values(&[method.as_str(), metric_route, status])
+            .inc();
     }
 
     /// Get an existing worker's sender or spawn a fresh worker task.
@@ -211,17 +234,12 @@ async fn fire(
     job: &Job,
     state: &mut BucketState,
 ) -> Result<ProxyResponse, ProxyError> {
-    let route = job
-        .route_key
-        .splitn(2, '|')
-        .nth(1)
-        .unwrap_or("")
-        .to_string();
+    let route = job.metric_route.clone();
     let method_label = job.method.as_str().to_string();
     let timer = registry
         .metrics
         .outbound_latency
-        .with_label_values(&[&method_label])
+        .with_label_values(&[&method_label, &route])
         .start_timer();
 
     let resp = registry
@@ -235,7 +253,8 @@ async fn fire(
 
     let resp = match resp {
         Ok(r) => r,
-        Err(e) => return Err(ProxyError::Upstream(e)),
+        // Strip the URL: it can carry webhook / interaction tokens.
+        Err(e) => return Err(ProxyError::Upstream(e.without_url())),
     };
 
     let status = resp.status().as_u16();
@@ -243,7 +262,10 @@ async fn fire(
 
     update_state(registry, job, &headers, status, state);
 
-    let body = resp.bytes().await?;
+    let body = resp
+        .bytes()
+        .await
+        .map_err(|e| ProxyError::Upstream(e.without_url()))?;
 
     registry
         .metrics
@@ -330,4 +352,73 @@ fn header_i64(headers: &HeaderMap, name: &str) -> Option<i64> {
 
 fn header_f64(headers: &HeaderMap, name: &str) -> Option<f64> {
     header_str(headers, name).and_then(|v| v.parse().ok())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ratelimit::{metric_route, normalize_route};
+    use std::collections::HashMap;
+
+    const SECRET: &str = "SECRETwebhookTOKEN";
+
+    fn test_registry() -> Arc<BucketRegistry> {
+        let config = Config {
+            bind: "127.0.0.1:0".to_string(),
+            metrics_bind: "127.0.0.1:0".to_string(),
+            outbound_timeout: Duration::from_secs(2),
+            disable_http2: true,
+            log_level: "info".to_string(),
+            global_ratelimit: 50,
+            bot_ratelimit_overrides: HashMap::new(),
+            bucket_idle_ttl: Duration::from_secs(60),
+        };
+        BucketRegistry::new(
+            reqwest::Client::new(),
+            Arc::new(config),
+            Arc::new(Metrics::new()),
+        )
+    }
+
+    async fn fire_at_closed_port(reg: &Arc<BucketRegistry>) -> Result<ProxyResponse, ProxyError> {
+        let path = format!("/api/webhooks/555/{SECRET}");
+        reg.dispatch(
+            None,
+            normalize_route("POST", &path),
+            metric_route("POST", &path),
+            reqwest::Method::POST,
+            format!("http://127.0.0.1:1{path}"),
+            HeaderMap::new(),
+            Bytes::new(),
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn upstream_failure_counted_as_502() {
+        let reg = test_registry();
+        assert!(fire_at_closed_port(&reg).await.is_err());
+        let n = reg
+            .metrics
+            .requests
+            .with_label_values(&["POST", "POST /api/webhooks/{id}/{token}", "502"])
+            .get();
+        assert_eq!(n, 1);
+    }
+
+    #[tokio::test]
+    async fn upstream_error_hides_url() {
+        let reg = test_registry();
+        let err = fire_at_closed_port(&reg).await.err().unwrap();
+        assert!(!err.to_string().contains(SECRET));
+    }
+
+    #[tokio::test]
+    async fn metrics_export_never_contains_token() {
+        let reg = test_registry();
+        let _ = fire_at_closed_port(&reg).await;
+        let out = reg.metrics.export();
+        assert!(!out.contains(SECRET));
+        assert!(out.contains(r#"route="POST /api/webhooks/{id}/{token}""#));
+    }
 }
