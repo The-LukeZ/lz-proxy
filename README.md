@@ -222,9 +222,18 @@ Prometheus at `lz-proxy:9000/metrics` and import
 `monitoring/grafana/dashboards/lz-proxy.json` directly (Grafana → Dashboards →
 Import). This mirrors how nirn-proxy ships a lone dashboard file.
 
-The dashboard panels: request rate by status, 429s by scope, in-flight, live
-buckets, global-limiter waits, outbound latency quantiles (p50/p95/p99), and top
-routes by request rate.
+The dashboard is one screen, read top to bottom:
+
+- **Headline numbers:** Requests / second, Error rate (4xx + 5xx, 429s
+  included), Discord response time (p95), 429s in range.
+- **What's happening:** Requests / second by status, Discord response time
+  (p50/p95/p99).
+- **Which routes:** Busiest routes, Slowest routes (p95).
+- **Ratelimit internals** (collapsed): 429s by scope, global-limiter waits,
+  in-flight requests, live buckets.
+
+"Discord response time" is how long Discord took to answer; time a request
+spent queued in the proxy is not included.
 
 ## Build
 
