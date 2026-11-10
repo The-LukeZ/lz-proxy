@@ -51,6 +51,43 @@ pub fn normalize_route(method: &str, path: &str) -> String {
     format!("{} /{}", method, out.join("/"))
 }
 
+/// Template a request path for metrics labels and log lines.
+///
+/// For reporting only, never for bucket keys (use `normalize_route` for
+/// those). Every id becomes `{id}`, webhook and interaction tokens become
+/// `{token}`, reaction emoji `{emoji}`, invite and template codes `{code}`.
+/// Any other segment that looks opaque (longer than 32 chars, or containing
+/// an uppercase letter) also becomes `{token}`, so no secret survives and the
+/// label set stays bounded. Query string is dropped.
+pub fn metric_route(method: &str, path: &str) -> String {
+    let path = path.split('?').next().unwrap_or(path);
+
+    let mut out: Vec<&str> = Vec::new();
+    let mut prev2 = "";
+    let mut prev = "";
+
+    for seg in path.split('/').filter(|s| !s.is_empty()) {
+        let templated = if is_snowflake(seg) {
+            "{id}"
+        } else if prev == "reactions" {
+            "{emoji}"
+        } else if (prev2 == "webhooks" || prev2 == "interactions") && is_snowflake(prev) {
+            "{token}"
+        } else if prev == "invites" || prev == "templates" {
+            "{code}"
+        } else if seg.len() > 32 || seg.chars().any(|c| c.is_ascii_uppercase()) {
+            "{token}"
+        } else {
+            seg
+        };
+        out.push(templated);
+        prev2 = prev;
+        prev = seg;
+    }
+
+    format!("{} /{}", method, out.join("/"))
+}
+
 /// Whether a path segment looks like a snowflake / opaque id we should collapse.
 fn is_snowflake(seg: &str) -> bool {
     !seg.is_empty() && seg.chars().all(|c| c.is_ascii_digit())
@@ -246,6 +283,70 @@ mod tests {
         assert_eq!(
             normalize_route("GET", "/api/v10/guilds/1/members?limit=2"),
             "GET /api/v10/guilds/1/members"
+        );
+    }
+
+    #[test]
+    fn metric_route_collapses_major_ids() {
+        assert_eq!(
+            metric_route("GET", "/api/v10/channels/123/messages/456"),
+            "GET /api/v10/channels/{id}/messages/{id}"
+        );
+        assert_eq!(
+            metric_route("GET", "/api/v10/guilds/999/members/111?limit=2"),
+            "GET /api/v10/guilds/{id}/members/{id}"
+        );
+    }
+
+    #[test]
+    fn webhook_token_never_in_metric_route() {
+        let r = metric_route("POST", "/api/webhooks/555/aBcD-ef_123/messages/@original");
+        assert_eq!(r, "POST /api/webhooks/{id}/{token}/messages/@original");
+    }
+
+    #[test]
+    fn interaction_token_never_in_metric_route() {
+        let r = metric_route("POST", "/api/v10/interactions/777/aW50ZXJhY3Rpb24/callback");
+        assert_eq!(r, "POST /api/v10/interactions/{id}/{token}/callback");
+    }
+
+    #[test]
+    fn reaction_emoji_collapsed() {
+        assert_eq!(
+            metric_route("PUT", "/api/v10/channels/1/messages/2/reactions/%F0%9F%91%8D/@me"),
+            "PUT /api/v10/channels/{id}/messages/{id}/reactions/{emoji}/@me"
+        );
+        assert_eq!(
+            metric_route("DELETE", "/api/v10/channels/1/messages/2/reactions/name:3/4"),
+            "DELETE /api/v10/channels/{id}/messages/{id}/reactions/{emoji}/{id}"
+        );
+    }
+
+    #[test]
+    fn invite_and_template_codes_collapsed() {
+        assert_eq!(
+            metric_route("GET", "/api/v10/invites/discord-dev"),
+            "GET /api/v10/invites/{code}"
+        );
+        assert_eq!(
+            metric_route("GET", "/api/v10/guilds/templates/hgM48av5Q69A"),
+            "GET /api/v10/guilds/templates/{code}"
+        );
+    }
+
+    #[test]
+    fn unknown_long_or_mixed_case_segment_is_token() {
+        assert_eq!(
+            metric_route("GET", "/api/v10/future/AbCdEf"),
+            "GET /api/v10/future/{token}"
+        );
+        assert_eq!(
+            metric_route("GET", "/api/v10/future/abcdefghijklmnopqrstuvwxyz0123456789"),
+            "GET /api/v10/future/{token}"
+        );
+        assert_eq!(
+            metric_route("GET", "/api/v10/guilds/1/auto-moderation/rules"),
+            "GET /api/v10/guilds/{id}/auto-moderation/rules"
         );
     }
 }
