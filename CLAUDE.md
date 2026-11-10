@@ -24,7 +24,7 @@ curl localhost:9000/metrics             # prometheus exposition
 
 # container
 docker build -t lz-proxy .              # musl static build → alpine
-docker compose up -d --build            # Pattern B: proxy in Docker, bot on host
+docker compose up -d --build            # Pattern A: proxy in Docker, bot on host
 docker compose --profile monitoring up -d   # + Prometheus/Grafana (needs GRAFANA_ADMIN_PASSWORD in .env)
 ```
 
@@ -66,4 +66,4 @@ The bot scope (`ratelimit::BotScope`) is a SHA-256 hash of the `Authorization` h
 
 ## Deployment gotcha (matters for compose/docs changes)
 
-Docker's iptables rules are evaluated _before_ UFW, so publishing a bare `"8080:8080"` exposes the proxy to the public internet even when UFW says deny. This proxy must never be internet-reachable. The shipped `docker-compose.yml` is Pattern B (loopback-only `127.0.0.1:8080:8080`, bot on host); Pattern A (no `ports:`, bot on the `internal` network) is the alternative for a dockerized bot. Keep any published port bound to loopback or a private interface. Full detail in `README.md`.
+Docker's iptables rules are evaluated _before_ UFW, so publishing a bare `"8080:8080"` exposes the proxy to the public internet even when UFW says deny. This proxy must never be internet-reachable. The shipped `docker-compose.yml` is Pattern A (loopback-only `127.0.0.1:8080:8080`, bot on host); Pattern B (no `ports:`, bot on the `internal` network) is the alternative for a dockerized bot. Keep any published port bound to loopback or a private interface. Full detail in `README.md`.

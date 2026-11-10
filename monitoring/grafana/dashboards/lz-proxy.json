@@ -591,7 +591,7 @@
           },
           "fieldConfig": {
             "defaults": {
-              "unit": "short",
+              "unit": "ops",
               "custom": {
                 "fillOpacity": 10,
                 "lineWidth": 1

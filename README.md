@@ -199,7 +199,8 @@ Steps, in the Cloudflare dashboard (Zero Trust):
    after `--token`) into `CLOUDFLARE_TUNNEL_TOKEN` in `.env`.
 3. **Public hostname.** In the tunnel, add a public hostname with the same
    hostname as step 1 and service `HTTP` → `grafana:3000`.
-4. **Start it.**
+4. **HTTPS only.** In the Cloudflare dashboard for your domain: SSL/TLS → Edge Certificates → turn on **Always Use HTTPS** and enable **HSTS**. Grafana's login cookie is marked secure, so it is only sent over HTTPS (or to localhost).
+5. **Start it.**
 
    ```sh
    docker compose --profile monitoring --profile tunnel up -d

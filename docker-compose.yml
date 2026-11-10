@@ -88,6 +88,8 @@ services:
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
       GF_USERS_ALLOW_SIGN_UP: "false"
+      # Session cookie only travels over HTTPS (Cloudflare) or localhost.
+      GF_SECURITY_COOKIE_SECURE: "true"
     volumes:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
