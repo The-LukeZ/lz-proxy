@@ -37,7 +37,7 @@ pub struct ProxyResponse {
 #[derive(Debug, thiserror::Error)]
 pub enum ProxyError {
     #[error("upstream request failed: {0}")]
-    Upstream(#[from] reqwest::Error),
+    Upstream(reqwest::Error),
     #[error("worker unavailable")]
     WorkerGone,
 }

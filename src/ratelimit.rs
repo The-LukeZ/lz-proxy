@@ -56,9 +56,11 @@ pub fn normalize_route(method: &str, path: &str) -> String {
 /// For reporting only, never for bucket keys (use `normalize_route` for
 /// those). Every id becomes `{id}`, webhook and interaction tokens become
 /// `{token}`, reaction emoji `{emoji}`, invite and template codes `{code}`.
-/// Any other segment that looks opaque (longer than 32 chars, or containing
-/// an uppercase letter) also becomes `{token}`, so no secret survives and the
-/// label set stays bounded. Query string is dropped.
+/// Any other segment that looks opaque also becomes `{token}`, so no secret
+/// survives and the label set stays bounded. Opaque means: contains both an
+/// ASCII letter and an ASCII digit (except API version segments like `v10`
+/// and the literal `oauth2`, which are static routes), is longer than 32
+/// chars, or contains an uppercase letter. Query string is dropped.
 pub fn metric_route(method: &str, path: &str) -> String {
     let path = path.split('?').next().unwrap_or(path);
 
@@ -75,7 +77,10 @@ pub fn metric_route(method: &str, path: &str) -> String {
             "{token}"
         } else if prev == "invites" || prev == "templates" {
             "{code}"
-        } else if seg.len() > 32 || seg.chars().any(|c| c.is_ascii_uppercase()) {
+        } else if (is_mixed_alnum(seg) && !is_version(seg) && seg != "oauth2")
+            || seg.len() > 32
+            || seg.chars().any(|c| c.is_ascii_uppercase())
+        {
             "{token}"
         } else {
             seg
@@ -86,6 +91,17 @@ pub fn metric_route(method: &str, path: &str) -> String {
     }
 
     format!("{} /{}", method, out.join("/"))
+}
+
+/// Whether a segment contains both an ASCII letter and an ASCII digit.
+fn is_mixed_alnum(seg: &str) -> bool {
+    seg.chars().any(|c| c.is_ascii_alphabetic()) && seg.chars().any(|c| c.is_ascii_digit())
+}
+
+/// API version segment: `v` followed by only digits (`v10`, `v9`).
+fn is_version(seg: &str) -> bool {
+    seg.strip_prefix('v')
+        .is_some_and(|rest| !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()))
 }
 
 /// Whether a path segment looks like a snowflake / opaque id we should collapse.
@@ -318,6 +334,34 @@ mod tests {
         );
         assert_eq!(
             metric_route("DELETE", "/api/v10/channels/1/messages/2/reactions/name:3/4"),
+            "DELETE /api/v10/channels/{id}/messages/{id}/reactions/{emoji}/{id}"
+        );
+    }
+
+    #[test]
+    fn short_lowercase_alnum_segment_is_token() {
+        assert_eq!(
+            metric_route("GET", "/api/v10/future/ab12cd"),
+            "GET /api/v10/future/{token}"
+        );
+    }
+
+    #[test]
+    fn version_and_oauth2_segments_kept() {
+        assert_eq!(
+            metric_route("GET", "/api/v10/oauth2/applications/@me"),
+            "GET /api/v10/oauth2/applications/@me"
+        );
+        assert_eq!(
+            metric_route("GET", "/api/v9/gateway/bot"),
+            "GET /api/v9/gateway/bot"
+        );
+    }
+
+    #[test]
+    fn encoded_emoji_then_user_id() {
+        assert_eq!(
+            metric_route("DELETE", "/api/v10/channels/1/messages/2/reactions/%F0%9F%91%8D/123"),
             "DELETE /api/v10/channels/{id}/messages/{id}/reactions/{emoji}/{id}"
         );
     }
