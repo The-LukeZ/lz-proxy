@@ -20,11 +20,15 @@
 # Or set COMPOSE_PROFILES once in .env (see .env.example) and just run
 # `docker compose up -d`.
 #
+# The `tunnel` profile needs Grafana, so it also starts Prometheus and Grafana.
+#
 # Network layout:
-#   internal: lz-proxy, prometheus, grafana
+#   internal: lz-proxy, prometheus
+#   metrics:  prometheus, grafana
 #   tunnel:   grafana, cloudflared
-# cloudflared is NOT on `internal`, so it cannot reach the proxy (8080), the
-# metrics port (9000) or Prometheus. Only Grafana is reachable through the tunnel.
+# Neither Grafana nor cloudflared is on `internal`, so they cannot reach the
+# proxy (8080) or its metrics port (9000). Grafana only talks to Prometheus;
+# cloudflared only talks to Grafana.
 services:
   lz-proxy:
     build: .
@@ -45,30 +49,40 @@ services:
   # Scrapes lz-proxy:9000 over the internal network. Not published to the host.
   prometheus:
     image: prom/prometheus:v3.16.0
-    profiles: [monitoring]
+    profiles: [monitoring, tunnel]
     restart: unless-stopped
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
-    networks: [internal]
+    networks: [internal, metrics]
     # no `ports:` - internal only.
 
   # Published to loopback only (127.0.0.1:3131) for local / SSH access. Host
   # port is 3131 (not Grafana's default 3000) to avoid colliding with other
   # services that may already bind localhost:3000 on a shared host.
-  # The admin password comes from GRAFANA_ADMIN_PASSWORD in .env; Grafana
-  # refuses to start without it, so it never falls back to admin/admin.
+  # The admin password comes from GRAFANA_ADMIN_PASSWORD in .env. Grafana
+  # refuses to start if it is unset, shorter than 12 characters, or a known
+  # placeholder, so it never runs with a guessable password.
+  # Not on `internal`: a Grafana user cannot point a data source at the proxy.
   grafana:
     image: grafana/grafana:13.3.1
-    profiles: [monitoring]
+    profiles: [monitoring, tunnel]
     restart: unless-stopped
     entrypoint:
       - /bin/sh
       - -c
       - |
-        if [ -z "$$GF_SECURITY_ADMIN_PASSWORD" ]; then
-          echo "GRAFANA_ADMIN_PASSWORD is not set (see .env.example)" >&2
-          exit 1
+        pw="$$GF_SECURITY_ADMIN_PASSWORD"
+        case "$$pw" in
+          *[![:space:]]*) ;;
+          *) echo "GRAFANA_ADMIN_PASSWORD is not set (see .env.example)" >&2; exit 1 ;;
+        esac
+        case "$$pw" in
+          change-me|admin|password)
+            echo "GRAFANA_ADMIN_PASSWORD is a placeholder, set a real password" >&2; exit 1 ;;
+        esac
+        if [ "$${#pw}" -lt 12 ]; then
+          echo "GRAFANA_ADMIN_PASSWORD must be at least 12 characters" >&2; exit 1
         fi
         exec /run.sh
     environment:
@@ -82,7 +96,7 @@ services:
       - grafana-storage:/var/lib/grafana
     ports:
       - "127.0.0.1:3131:3000"
-    networks: [internal, tunnel]
+    networks: [metrics, tunnel]
     depends_on: [prometheus]
 
   # Cloudflare Tunnel (remote-managed). Connects OUT to Cloudflare; publishes
@@ -105,6 +119,8 @@ volumes:
 
 networks:
   internal:
+    driver: bridge
+  metrics:
     driver: bridge
   tunnel:
     driver: bridge

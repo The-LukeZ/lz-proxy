@@ -139,7 +139,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(lz_requests_total{status=~\"4..|5..\"}[$__rate_interval])) / sum(rate(lz_requests_total[$__rate_interval]))",
+          "expr": "(sum(rate(lz_requests_total{status=~\"4..|5..\"}[$__rate_interval])) or vector(0)) / sum(rate(lz_requests_total[$__rate_interval]))",
           "refId": "A"
         }
       ]
@@ -266,7 +266,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(lz_ratelimited_total[$__range]))",
+          "expr": "sum(increase(lz_ratelimited_total[$__range])) or vector(0)",
           "refId": "A"
         }
       ]

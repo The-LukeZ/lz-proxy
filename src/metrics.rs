@@ -37,6 +37,11 @@ impl Metrics {
             &["scope"],
         )
         .unwrap();
+        // Create every scope series at 0 up front, so the first 429 of a scope
+        // shows up in `increase()` and the dashboard reads 0, not "No data".
+        for scope in ["global", "user", "shared", "unknown"] {
+            ratelimited.with_label_values(&[scope]);
+        }
         let in_flight =
             IntGauge::new("lz_in_flight", "Requests currently queued or firing").unwrap();
         let buckets = IntGauge::new("lz_buckets", "Live bucket worker tasks").unwrap();
@@ -88,5 +93,21 @@ impl Metrics {
 impl Default for Metrics {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ratelimited_scopes_exported_at_zero_before_first_429() {
+        let out = Metrics::new().export();
+        for scope in ["global", "user", "shared", "unknown"] {
+            assert!(
+                out.contains(&format!("lz_ratelimited_total{{scope=\"{scope}\"}} 0")),
+                "missing zero series for {scope}"
+            );
+        }
     }
 }

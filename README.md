@@ -157,7 +157,7 @@ brings up Prometheus (scraping `lz-proxy:9000`, internal-only) and Grafana with
 the datasource and dashboard already provisioned:
 
 ```sh
-cp .env.example .env    # then set GRAFANA_ADMIN_PASSWORD
+cp .env.example .env    # then set GRAFANA_ADMIN_PASSWORD (12+ characters)
 docker compose --profile monitoring up -d
 ```
 
@@ -167,7 +167,7 @@ is needed.
 
 Grafana is published to **loopback only** (`127.0.0.1:3131`). Log in as `admin`
 with the password from `GRAFANA_ADMIN_PASSWORD`; Grafana refuses to start if it
-is not set. View it locally, over an SSH tunnel, or through the Cloudflare
+is unset, shorter than 12 characters, or a placeholder like `change-me`. View it locally, over an SSH tunnel, or through the Cloudflare
 Tunnel below. The `lz-proxy` dashboard appears automatically.
 
 ### Remote access via Cloudflare Tunnel
@@ -182,7 +182,12 @@ opened on the server.
 
 By design, `cloudflared` sits on its own `tunnel` network together with Grafana
 only. It cannot reach the proxy (8080), the metrics port (9000) or Prometheus,
-so even a wrong hostname mapping cannot expose them.
+so even a wrong hostname mapping cannot expose them. Grafana itself is not on
+the proxy's network either: it reaches only Prometheus, so a Grafana login
+cannot be used to send requests to the proxy.
+
+The `tunnel` profile also starts Prometheus and Grafana, so
+`COMPOSE_PROFILES=tunnel` alone works too.
 
 Steps, in the Cloudflare dashboard (Zero Trust):
 
