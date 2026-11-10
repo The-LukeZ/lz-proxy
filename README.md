@@ -90,7 +90,13 @@ Point your bot library at `http://<host>:8080/api` instead of
 
 Metrics: `lz_requests_total{method,route,status}`,
 `lz_ratelimited_total{scope}`, `lz_in_flight`, `lz_buckets`,
-`lz_outbound_latency_seconds`, `lz_global_limit_waits_total`.
+`lz_outbound_latency_seconds{method,route}`, `lz_global_limit_waits_total`.
+
+`route` is a templated path with no ids or secrets, e.g.
+`POST /api/webhooks/{id}/{token}`. Requests that fail before Discord answers are
+counted with status `502` (upstream error) or `503` (worker unavailable).
+`lz_outbound_latency_seconds` is Discord's response time only, not time queued
+in the proxy.
 
 ## Deployment - read this carefully
 
@@ -146,17 +152,70 @@ should refuse/fail.
 
 Two ways to consume the metrics:
 
-**Turnkey stack (recommended).** An optional compose overlay brings up Prometheus
-(scraping `lz-proxy:9000`, internal-only) and Grafana with the datasource and
-dashboard already provisioned:
+**Turnkey stack (recommended).** The `monitoring` profile in `docker-compose.yml`
+brings up Prometheus (scraping `lz-proxy:9000`, internal-only) and Grafana with
+the datasource and dashboard already provisioned:
 
 ```sh
-docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
+cp .env.example .env    # then set GRAFANA_ADMIN_PASSWORD
+docker compose --profile monitoring up -d
 ```
 
-Grafana is published to **loopback only** (`127.0.0.1:3131`, admin/admin by
-default - change it). View it locally or over an SSH tunnel; never expose it
-publicly. The `lz-proxy` dashboard appears automatically.
+To skip the flag, set `COMPOSE_PROFILES=monitoring` in `.env` and run a plain
+`docker compose up -d`. Without any profile only the proxy starts, and no `.env`
+is needed.
+
+Grafana is published to **loopback only** (`127.0.0.1:3131`). Log in as `admin`
+with the password from `GRAFANA_ADMIN_PASSWORD`; Grafana refuses to start if it
+is not set. View it locally, over an SSH tunnel, or through the Cloudflare
+Tunnel below. The `lz-proxy` dashboard appears automatically.
+
+### Remote access via Cloudflare Tunnel
+
+The optional `tunnel` profile runs `cloudflared`, which connects **out** to
+Cloudflare and makes Grafana reachable on a hostname of yours. No port is
+opened on the server.
+
+> **Warning:** the tunnel hostname is on the public internet. Create the
+> Cloudflare Access policy **before** you start the tunnel, or the dashboard
+> is open to anyone who finds the hostname (behind only the Grafana login).
+
+By design, `cloudflared` sits on its own `tunnel` network together with Grafana
+only. It cannot reach the proxy (8080), the metrics port (9000) or Prometheus,
+so even a wrong hostname mapping cannot expose them.
+
+Steps, in the Cloudflare dashboard (Zero Trust):
+
+1. **Access first.** Access → Applications → Add an application → Self-hosted.
+   Use the hostname you will give Grafana (e.g. `lz-grafana.example.com`) and add
+   a policy that allows only you (e.g. Include → Emails → your address).
+2. **Create the tunnel.** Networks → Tunnels → Create a tunnel → Cloudflared.
+   Name it, then copy the token from the shown install command (the long string
+   after `--token`) into `CLOUDFLARE_TUNNEL_TOKEN` in `.env`.
+3. **Public hostname.** In the tunnel, add a public hostname with the same
+   hostname as step 1 and service `HTTP` → `grafana:3000`.
+4. **Start it.**
+
+   ```sh
+   docker compose --profile monitoring --profile tunnel up -d
+   ```
+
+   or set `COMPOSE_PROFILES=monitoring,tunnel` in `.env` and run
+   `docker compose up -d`.
+
+Open the hostname: Cloudflare Access asks you to log in first, then Grafana does.
+
+### Upgrading from the old monitoring overlay
+
+- `docker-compose.monitoring.yml` is gone; use the `monitoring` profile above.
+- Grafana now uses a new volume (`grafana-storage`), so it starts fresh and
+  picks up `GRAFANA_ADMIN_PASSWORD`. The old volume (`<project>_grafana-data`,
+  e.g. `lz-proxy_grafana-data`) is no longer used. Remove it by hand if you
+  want: `docker volume rm lz-proxy_grafana-data`.
+- Metric shape changed: `route` labels are now templated (every id is `{id}`,
+  webhook and interaction tokens are `{token}`), and
+  `lz_outbound_latency_seconds` has a `route` label. Old series in an existing
+  Prometheus volume look different from new ones.
 
 **Bring-your-own Grafana.** If you already run Prometheus + Grafana, point your
 Prometheus at `lz-proxy:9000/metrics` and import

@@ -1,12 +1,30 @@
-# Pattern B (default): the proxy runs in Docker, your bot runs on the HOST
+# lz-proxy, with optional monitoring and remote dashboard access.
+#
+# Pattern A (default): the proxy runs in Docker, your bot runs on the HOST
 # (not in Docker). The port is published to loopback ONLY, so your host bot can
 # reach it at http://127.0.0.1:8080/api while it stays off the public internet.
 #
 # The `127.0.0.1:` prefix is load-bearing: a bare "8080:8080" would punch through
 # UFW via Docker's iptables rules and expose the proxy to the world (see README).
 #
-# If your bot ALSO runs in Docker, prefer Pattern B instead: drop the `ports:`
-# block, put the bot on the `internal` network, and let it reach http://lz-proxy:8080.
+# Pattern B: if your bot ALSO runs in Docker, drop the `ports:` block of
+# lz-proxy, put the bot on the `internal` network, and let it reach
+# http://lz-proxy:8080.
+#
+# Optional parts are switched on with Compose profiles:
+#
+#   docker compose up -d                                         # proxy only
+#   docker compose --profile monitoring up -d                    # + Prometheus, Grafana
+#   docker compose --profile monitoring --profile tunnel up -d   # + Cloudflare Tunnel
+#
+# Or set COMPOSE_PROFILES once in .env (see .env.example) and just run
+# `docker compose up -d`.
+#
+# Network layout:
+#   internal: lz-proxy, prometheus, grafana
+#   tunnel:   grafana, cloudflared
+# cloudflared is NOT on `internal`, so it cannot reach the proxy (8080), the
+# metrics port (9000) or Prometheus. Only Grafana is reachable through the tunnel.
 services:
   lz-proxy:
     build: .
@@ -19,11 +37,74 @@ services:
       # LZ_BOT_RATELIMIT_OVERRIDES: "botid:limit,botid:limit"
     ports:
       - "127.0.0.1:8080:8080"
-      # Metrics stays on the internal network for the monitoring overlay.
+      # Metrics stays on the internal network for Prometheus.
       # Uncomment to scrape from a host-side Prometheus (loopback only):
       # - "127.0.0.1:9000:9000"
     networks: [internal]
 
+  # Scrapes lz-proxy:9000 over the internal network. Not published to the host.
+  prometheus:
+    image: prom/prometheus:v3.16.0
+    profiles: [monitoring]
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks: [internal]
+    # no `ports:` - internal only.
+
+  # Published to loopback only (127.0.0.1:3131) for local / SSH access. Host
+  # port is 3131 (not Grafana's default 3000) to avoid colliding with other
+  # services that may already bind localhost:3000 on a shared host.
+  # The admin password comes from GRAFANA_ADMIN_PASSWORD in .env; Grafana
+  # refuses to start without it, so it never falls back to admin/admin.
+  grafana:
+    image: grafana/grafana:13.3.1
+    profiles: [monitoring]
+    restart: unless-stopped
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        if [ -z "$$GF_SECURITY_ADMIN_PASSWORD" ]; then
+          echo "GRAFANA_ADMIN_PASSWORD is not set (see .env.example)" >&2
+          exit 1
+        fi
+        exec /run.sh
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      # New volume name on purpose: the admin password only applies when the
+      # Grafana database is first created.
+      - grafana-storage:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3131:3000"
+    networks: [internal, tunnel]
+    depends_on: [prometheus]
+
+  # Cloudflare Tunnel (remote-managed). Connects OUT to Cloudflare; publishes
+  # no ports. In the Cloudflare dashboard map your hostname to
+  # http://grafana:3000 and put a Cloudflare Access policy on it BEFORE
+  # starting this. See README "Remote access via Cloudflare Tunnel".
+  cloudflared:
+    image: cloudflare/cloudflared:2026.10.7
+    profiles: [tunnel]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    networks: [tunnel]
+    depends_on: [grafana]
+
+volumes:
+  prometheus-data:
+  grafana-storage:
+
 networks:
   internal:
+    driver: bridge
+  tunnel:
     driver: bridge
