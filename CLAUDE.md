@@ -25,7 +25,7 @@ curl localhost:9000/metrics             # prometheus exposition
 # container
 docker build -t lz-proxy .              # musl static build → alpine
 docker compose up -d --build            # Pattern B: proxy in Docker, bot on host
-docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d  # + Prometheus/Grafana
+docker compose --profile monitoring up -d   # + Prometheus/Grafana (needs GRAFANA_ADMIN_PASSWORD in .env)
 ```
 
 There is no linter config beyond stock `cargo`; run `cargo clippy` if you want lint feedback. The build must stay warning-clean.
